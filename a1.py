@@ -131,33 +131,3 @@ def main():
         else: 
             state = walk_1.stop_walk()          #停止
 main()
-
-def no_3_1():                         #避障
-    motion_time = 0
-    i = 0
-    while i != 2:
-        time.sleep(0.1)
-        Middle = cv_m()
-        motion_time += 1
-        if motion_time >= 0 and motion_time <= 8:       #直行
-            state = walk_1.forward_walk(1.2,-0.05)
-        elif  motion_time > 8 and motion_time<=11:        #停止
-            state = walk_1.stop_walk()
-        elif motion_time > 11 and motion_time <= 21:        #向左平移
-            state = walk_1.leftyaw_walk(0)
-        elif  motion_time>21 and motion_time<=24:       #停一下
-            state = walk_1.stop_walk()
-        elif motion_time > 24 and motion_time <= 39:        #直行
-            state = walk_1.forward_walk(1.2,-0.05)
-        elif motion_time > 39 and motion_time <=42:         #停一下
-            state = walk_1.stop_walk() 
-            i = 1
-        # elif motion_time > 42:        #向右平移
-        #     state = walk_1.rightyaw_walk(0)
-            
-        elif i == 1 and Middle == 0:
-            i = 2
-        elif (not Middle or Middle != 0) and i == 1:
-            state = walk_1.rightyaw_walk(0)
-        print(motion_time)
-        cv_m()
