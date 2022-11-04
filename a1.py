@@ -1,101 +1,102 @@
+import pyrealsense2 as rs
+import numpy as np
+import cv2
+import Unitree_Python_sdk
 import socket
-from imp import C_EXTENSION
-from telnetlib import WILL
-from typing_extensions import Self
-import walk
 import time
 
-#-----------------------配置区域-------------------------#
-walk_1 = walk.Unitree_Robot()  #调用SDK库
-Middle = [0,0]                                             #中值变量
-re = [0,0]
-udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  #UPD接收
-udp.bind(('', 4000))                           # 为服务器绑定一个固定的地址，ip和端口
-a = 125
-go = 1                                                      #直行速度
-#------------------------------------------------------------#
+#---------------------------配置列表---------------------------#
+#判断是否   左  , 右
+LR_line = [220,420]
+#消除背景    宽   , 高
+WH_line = [100,100]
+#------------------------------------------------------------------#
 
-#UPD接收
-def cv_m():
-    data,addr = udp.recvfrom(1024)
-    #print(data.decode('utf-8') ) #打印接收的内容
-    data = int(data)
-    return data         #返回值
+#-------------------------运动初始化---------------------------#
+unitree_robot = Unitree_Python_sdk.Unitree_Robot()  #调用SDK库
+motion_time = 0
+#------------------------------------------------------------------#
 
-def no_1():         #倾倒
-    motion_time = 0
-    while motion_time <= 50:
-        time.sleep(0.1)
-        motion_time += 1
-        if (motion_time >= 1 and motion_time < 5):              #停止
-            state = walk_1.stop_walk()
-        elif(motion_time >= 5 and motion_time < 30):            #直行
-            state = walk_1.forward_walk(0.7,-0.05)
-        if (motion_time >= 30 and motion_time < 35):            #停止，防止卡脚
-            state = walk_1.stop_walk()
-        elif (motion_time >= 35 and motion_time < 50):          #倾倒
-            state = walk_1.robot_pose(1.9,0.0,0.0,0.0)
-        print(motion_time)
-        cv_m()
 
-def no_2():                         #爬楼梯
-    motion_time = 0
-    while motion_time < 35:
-        time.sleep(0.1)
-        motion_time += 1
-        if(motion_time >= 1 and motion_time < 13):
-            state=walk_1.rightRotate_walk(1,-0.7,-0.1)
-        if(motion_time >= 13):
-            state=walk_1.robot_climb()
-        print(motion_time)
-        cv_m()
+#----------------------D345i初始化配置----------------------#
+#配置颜色流
+pipeline = rs.pipeline()
+config = rs.config()
+#创建窗口，指定颜色类型
+config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+# 开始直播
+pipeline.start(config)
+#------------------------------------------------------------------#
+#视觉
+def D345i_init():
+    Left = 2
+    Right = 2
+    #等待一对连贯的帧: 颜色
+    frames = pipeline.wait_for_frames()
+    #正常读取的视频流
+    color_frame = frames.get_color_frame()
+    #将图像转换为数字数组
+    color_image = np.asanyarray(color_frame.get_data())
+    #滤波
+    frame1 = cv2.blur(color_image,(5,5))
+    #空间转换
+    hsv = cv2.cvtColor(frame1,cv2.COLOR_BGR2HSV)
+    #颜色阈值分割，hsv的三个分量值-get remove iio-sensor -proxy
+    low_blue = np.array([10, 75, 30])                 #低于值变为0
+    high_blue = np.array([80, 255, 255])           #高于值变为0
+    #low_blue = np.array([20, 20, 75])
+    #high_blue = np.array([100, 255, 255]) 
+    dst = cv2.inRange(hsv, low_blue, high_blue)     #之间变为255
 
-def no_3():
-    motion_time = 0
-    while motion_time < 45:
-        time.sleep(0.1)
-        motion_time += 1
-        if motion_time >= 0 and motion_time <= 15:
-            state = walk_1.forward_walk(go,0.1)
-        elif motion_time > 15 and motion_time <= 25:
-            state = walk_1.leftyaw_walk(0)
-        elif motion_time > 25 and motion_time <= 35:
-            state = walk_1.forward_walk(go,0.1)
-        elif motion_time > 35:
-            state = walk_1.rightyaw_walk(0)
-        print(motion_time)
-        cv_m()
+    #去除噪点
+    kerenl = cv2.getStructuringElement(cv2.MORPH_RECT,(9,9))
+    dst1 = cv2.morphologyEx(dst,cv2.MORPH_OPEN,kerenl)  #开运算去除外部噪点
+    dst2 = cv2.morphologyEx(dst1,cv2.MORPH_CLOSE,kerenl)    #闭运算
 
-#主函数c
+    #查找轮廓, 必须是3个返回值
+    dst2,cnts,h = cv2.findContours(dst2,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+
+    for(i,c)in enumerate(cnts):
+        (x,y,w,h) = cv2.boundingRect(c)
+        #去除背景干扰
+        isValid = (w >= WH_line[0]) and (h >= WH_line[1])
+        if( not isValid):
+            continue
+        #有效
+	    # 计算等高线的中心
+        M = cv2.moments(c)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+
+	    # 在图像上绘制形状的轮廓和中心
+        cv2.drawContours(frame1, [c], -1, (0, 255, 0), 2)       #轮廓绘制
+        cv2.circle(frame1, (cX, cY), 5, (255, 255, 255), -1)      #绘制点
+        cv2.putText(frame1, "O", (cX - 20, cY - 20),                  #绘制字符
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        #是否偏移逻辑处理
+        if(cX <= LR_line[0]):Left = 1
+        else: Left = 0 
+        if(cX >= LR_line[1]):Right = 1
+        else: Right = 0
+    return Left,Right
+
+def dog_init():
+    time.sleep(0.002)
+    motion_time += 1
+    if (motion_time < 1000):
+        state = unitree_robot.robot_dance(1)
+    if (motion_time >= 1000 and motion_time < 2000):
+        state = unitree_robot.quit_dance()
+    if (motion_time >= 2000 and motion_time < 3000):
+        state = unitree_robot.robot_walking(gaitType = 1, forwardSpeed = 0.1, sidewaySpeed = 0.0, rotateSpeed = 0.0, speedLevel = 0, bodyHeight = 0.0)
+    if(motion_time >= 3000):
+        state = unitree_robot.robot_pose(0.0, 0.0, 0, 0.0)
+
+#主函数
 def main():
     while True:
-        Middle = 999
-        Middle = cv_m()
-        print("视觉返回值",Middle)
-        #print(Middle[1])
-        if(Middle == 11):       #倾倒检测
-           no_1()
-        elif(Middle == 12):#爬楼梯
-            no_2()
-        elif(Middle == 13): #避障
-            no_3()
-        elif(Middle == 0): 
-            state = walk_1.forward_walk(go,0.1)      #直行
-        #向左修正，(直行速度，旋转，侧向)
-        elif(Middle == -1):
-            state = walk_1.leftRotate_walk(go , 0.4 ,0.1)
-        elif(Middle == -2):
-            state = walk_1.leftRotate_walk(go , 0.6 ,0.1)
-        #向右修正，(直行速度，旋转，侧向)
-        elif(Middle == 1):
-            state = walk_1.rightRotate_walk(go, -0.4 ,-0.1)
-        elif(Middle == 2):
-            state = walk_1. rightRotate_walk(go, -0.6 ,-0.1)
-        
-        # elif(Middle == -3):
-        #     state = walk_1. forward_walk((0.4),-0.05)
-        elif(Middle == 3):
-            state = walk_1. Robot_rightRotate()         #转向
-        else: 
-            state = walk_1.stop_walk()          #停止
+        Left_1,Right_1= D345i_init()
+        print("左右偏移",Left_1,Right_1)
+        dog_init()
+
 main()
