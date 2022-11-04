@@ -57,7 +57,7 @@ class Unitree_Robot():#定义一个类叫宇数机器人
     def robot_walking(self, gaitType = 1, forwardSpeed = 0.0, sidewaySpeed = 0.0, 
                       rotateSpeed = 0.0, speedLevel = 0, bodyHeight = 0.0, footRaiseHeight = 0.0):#机器人行走
         self.cmd_init()
-        self.gaitType = gaitType #=1
+        self.gaitType = 1 #=1
         self.speedLevel = speedLevel #=0.0
         self.footRaiseHeight = footRaiseHeight  #=0.0
         self.forwardSpeed = forwardSpeed    #=0.0
@@ -72,8 +72,6 @@ class Unitree_Robot():#定义一个类叫宇数机器人
         return robot_state  #将robot_state值返回终端
     def stop_walk(self):#停止走路
         self.cmd_init()
-        self.gaitType = 0
-        self.mode =2
         robot_state = self.unitree_robot.getState()#getshate将walking数值记录下来
         self.recv_UDP()
         self.robot_control()  #运行robot_control
@@ -83,7 +81,7 @@ class Unitree_Robot():#定义一个类叫宇数机器人
         self.cmd_init()
         self.gaitType = 1
         self.forwardSpeed = forwardSpeed
-        self.sidewaySpeed = 0.6
+        self.sidewaySpeed = 0.7
         self.mode =2
         robot_state = self.unitree_robot.getState()
         self.recv_UDP()
@@ -94,7 +92,7 @@ class Unitree_Robot():#定义一个类叫宇数机器人
         self.cmd_init()
         self.gaitType = 1
         self.forwardSpeed = forwardSpeed
-        self.sidewaySpeed = -0.2
+        self.sidewaySpeed = -0.7
         self.mode =2
         robot_state = self.unitree_robot.getState()
         self.recv_UDP()
@@ -137,7 +135,7 @@ class Unitree_Robot():#定义一个类叫宇数机器人
         self.cmd_init()
         self.forwardSpeed = 0.2
         self.gaitType =1
-        self.rotateSpeed =-1.8
+        self.rotateSpeed =-2
         self.mode = 2
         robot_state = self.unitree_robot.getState()
         self.recv_UDP()
@@ -173,10 +171,10 @@ class Unitree_Robot():#定义一个类叫宇数机器人
     def robot_climb(self):          #爬楼梯
         self.mode=2
         self.gaitType = 3
-        self.forwardSpeed = 0.7
+        self.forwardSpeed = 1             #直行速度
         self.footRaiseHeight = 0.5
-        self.sidewaySpeed = 0.05
-        self.rotateSpeed = 0.01
+        self.sidewaySpeed = 0.05            #平移
+        self.rotateSpeed = 0.05                  #旋转
         robot_state = self.unitree_robot.getState()
         self.recv_UDP()
         self.robot_control()
